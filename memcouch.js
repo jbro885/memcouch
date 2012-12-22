@@ -15,7 +15,8 @@ memcouch.db = function () {
     db.put = function (doc) {
         doc._id || (doc._id = Math.random().toFixed(20).slice(2));
         doc._seq = ++db.update_seq;         // NOTE: this is different than _rev (we leave that field alone)
-        if (doc._id in byId) return;
+        if (doc._deleted) delete byId[doc._id];
+        else if (doc._id in byId) ;
         else docs.push(byId[doc._id] = doc);
         notify(doc);
     };
@@ -35,7 +36,7 @@ memcouch.db = function () {
     };
     
     db.all = function () {
-        return db.query(function (doc._id) {
+        return db.query(function (doc) {
             emit(doc._id, doc);
         });
     };
@@ -50,12 +51,11 @@ memcouch.db = function () {
         var results = [],
             _doc = null;
         function emit(k,v) {
-            results.push({id:_doc._id, doc:_doc, key:k, value:v});
+            results.push({id:_doc._id, doc:_doc, key:k||null, value:v||null});
         };
         docs.forEach(function (doc) {
             if (doc._deleted) return;
-            _doc = doc;
-            map(doc);
+            map(_doc = doc);
         });
         
         return (cmp) ? results.sort(function (a,b) {
@@ -67,11 +67,7 @@ memcouch.db = function () {
         return db.query(function (doc) {
             if (doc._seq > seq) emit(doc._seq);
         }, true).map(function (row) {
-            var result = {
-                seq: row.key,
-                doc: row.doc,
-                id: row.id
-            };
+            var result = {seq:row.key, doc:row.doc, id:row.id};
             if (row.doc._deleted) result.deleted = true;
             return result;
         });
