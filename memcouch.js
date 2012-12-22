@@ -37,7 +37,7 @@ memcouch.db = function () {
     
     db.all = function () {
         return db.query(function (doc) {
-            emit(doc._id, doc);
+            this.emit(doc._id, doc);
         });
     };
     
@@ -45,18 +45,16 @@ memcouch.db = function () {
         map || (map = function (d) { return d._id; });
         if (cmp === true) cmp = memcouch.cmp;
         
-        // rescope `map` so it can access emit, h.t. https://github.com/daleharvey/pouchdb/blob/d46951f/src/adapters/pouch.idb.js#L883
-        eval("var map = " + map);
-        
         var results = [],
             _doc = null;
-        function emit(k,v) {
+        db.emit = function (k,v) {
             results.push({id:_doc._id, doc:_doc, key:k||null, value:v||null});
         };
         docs.forEach(function (doc) {
             if (doc._deleted) return;
-            map(_doc = doc);
+            map.call(db, _doc = doc);
         });
+        delete db.emit;
         
         return (cmp) ? results.sort(function (a,b) {
             return cmp(a.key, b.key);
@@ -65,7 +63,7 @@ memcouch.db = function () {
     
     db.since = function (seq) {
         return db.query(function (doc) {
-            if (doc._seq > seq) emit(doc._seq);
+            if (doc._seq > seq) this.emit(doc._seq);
         }, true).map(function (row) {
             var result = {seq:row.key, doc:row.doc, id:row.id};
             if (row.doc._deleted) result.deleted = true;
@@ -84,7 +82,7 @@ memcouch.db = function () {
         watchers.forEach(function (cb) {
             var result = {seq:doc._dbseq, doc:doc, id:doc._id};
             if (doc._deleted) result.deleted = true;
-            cb(result);
+            cb.call(db, result);
         });
     }
     
