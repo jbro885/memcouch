@@ -8,7 +8,7 @@ memcouch.cmp = function (a,b) {
 memcouch.db = function () {
     var db = {},
         docs = [],
-        byId = {};
+        byId = Object.create(null);
     
     db.update_seq = 0;
     
