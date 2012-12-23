@@ -1,0 +1,16 @@
+{
+  "name": "memcouch",
+  "version": "0.1.0",
+  "description": "tiny in-memory CouchDB wannabe",
+  "main": "memcouch.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/natevw/memcouch.git"
+  },
+  "keywords": [
+    "couchdb"
+  ],
+  "author": "Nathan Vander Wilt",
+  "license": "BSD",
+  "readmeFilename": "README.md"
+}
