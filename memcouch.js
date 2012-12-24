@@ -15,14 +15,16 @@ memcouch.db = function () {
     db.put = function (doc) {
         doc._id || (doc._id = Math.random().toFixed(20).slice(2));
         doc._seq = ++db.update_seq;         // NOTE: this is different than _rev (we leave that field alone)
-        if (doc._deleted) delete byId[doc._id];
-        else if (doc._id in byId) ;         // TODO: this won't update if doc is coming from elsewhere
-        else docs.push(byId[doc._id] = doc);
+        
+        var id = doc._id;
+        if (id in byId) docs[byId[id]] = doc;
+        else byId[id] = docs.push(doc) - 1;
+        if (doc._deleted) delete byId[id];
         notify(doc);
     };
     
     db.get = function (id) {
-        return byId[id];
+        return docs[byId[id]];
     };
     
     db.del = function (id) {
