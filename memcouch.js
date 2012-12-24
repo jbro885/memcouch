@@ -16,7 +16,7 @@ memcouch.db = function () {
         doc._id || (doc._id = Math.random().toFixed(20).slice(2));
         doc._seq = ++db.update_seq;         // NOTE: this is different than _rev (we leave that field alone)
         if (doc._deleted) delete byId[doc._id];
-        else if (doc._id in byId) ;
+        else if (doc._id in byId) ;         // TODO: this won't update if doc is coming from elsewhere
         else docs.push(byId[doc._id] = doc);
         notify(doc);
     };
