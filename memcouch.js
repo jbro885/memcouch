@@ -30,9 +30,8 @@ memcouch.db = function () {
     db.del = function (id) {
         var doc = db.get(id);
         Object.keys(doc).forEach(function (k) {
-            delete doc[k];
+            if (k[0] !== '_') delete doc[k];
         });
-        doc._id = id;
         doc._deleted = true;
         db.put(doc);
     };
