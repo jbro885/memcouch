@@ -67,13 +67,13 @@ memcouch.db = function () {
             if (doc._seq > seq) this.emit(doc._seq);
         }, true).map(function (row) {
             var result = {seq:row.key, doc:row.doc, id:row.id};
-            if (row.doc._deleted) result.deleted = true;
+            if (row.doc._deleted) result.deleted = true;            // TODO: .query() won't give us _deleted docs!
             return result;
         });
     };
     
     var watchers = [];
-    db.watch = function (cb) { watchers.push(cb); };
+    db.watch = function (cb) { watchers.push(cb); };                // TODO: option to "catch-up"?
     db.clear = function (cb) { var idx = watchers.indexOf(cb); if (~idx) watchers.splice(idx, 1); };
     function notify(doc) {
         watchers.forEach(function (cb) {

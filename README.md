@@ -55,8 +55,34 @@ First `<script src="memcouch.js"></script>` or `npm install memcouch` as needed.
     }, false);
 
 
+## API Documentation
+
+Memcouch provides a sychronous API to an in-memory collection of documents. The basic API is as follows:
+
+* `var db = memcouch.db()` — returns a new in-memory document collection
+* `db.put(doc)` — saves new document or increments revision, if no _id one will be generated
+* `db.get(id)` — returns document with given _id, or `undefined` if missing. This object may be shared with other callers.
+* `db.del(id)` — removes all non-internal fields and adds `"_deleted": true`. will no longer show up from `.get` or `.query`
+
+Documents are given a `_seq` field, which is set to the database update sequence (see below) when the document was last saved with `.put()`.
+Currently the `_rev` field is left as-is, so eventual writes back to a mirrored database will succeed unless the document has changed remotely.
+
+There are also some Couch-like ways to retrieve and monitor data:
+
+* `db.update_seq` — starts at zero, increments each time a change is made
+* `db.query(map[, cmp])` — returns array of what map function yields via `db.emit(key, value)` (db is passed as `this` argument). Results will not be sorted unless a comparator (or `true` for default) is passed. Using the default comparator <del>is</del>will return similar results as a [CouchDB view](http://guide.couchdb.org/draft/views.html), albeit relying on range filtering within the map function [may be extended later] and reduction using the ES5 built-in `Array.prototype.reduce` method.
+* `db.since(seq)` — returns a [_changes](http://guide.couchdb.org/draft/notifications.html)-like array since a given update_seq. Note that memcouch does not do `_rev` tracking, and so no `"changes":[{"rev":"…"]` field is provided; just `{seq,doc,id[,deleted]}` fields. **BUG**: deletions are currently filtered out by underlying `.query()` call.
+* `db.watch(cb)` — during all subsequent changes, the callback function `cb` will be passed a change object like those provided within the `.since()` array. This callback is syncronous, i.e. it happens before control is returned to the caller of `.put()`.
+* `db.clear(cb)` — removes callback provided to previous `.watch()` call, does nothing if original function is not found.
+
+Using the optional `memcouch.pouch` helper function, you can slave a memcouch instance to PouchDB (and therefore CouchDB via its HTTP adapter):
+
+* `var status memcouch.slaveToPouch(db, pouch)` — sends all changes from memcouch `db` to `pouch` instance, and vice versa. Returns a status object including a `changesPending:0` field, which will be incremented while asyncronous write(s) from memcouch to PouchDB are in progress. No conflict handling is done, the memcouch database is simply overwritten with recent changes sent from PouchDB. **BUG**: does not "catch up" PouchDB with changes that happened to `db` before this call (all existing documents from PouchDB are already copied over to memcouch, however).
+
+Since memcouch does not track document revision trees, this does not implement the "true" CouchDB masterless replication algorithm. It is only intended to provide something of a buffer between your app's active code and a single underyling persistent store. Any multi-peer or filtered replications should be set up at the PouchDB/CouchDB level.
+
 ## TODO
 
 1. Implement default comparison for emitted arrays/objects
-1. ???
+1. Fix up some missing since/watch features.
 1. Profit!
