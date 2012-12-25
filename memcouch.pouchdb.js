@@ -27,15 +27,15 @@ memsync.slaveToPouch = function (memdb, pouch) {
     memdb.watch(function (change) {
         if (ignoreOwnChange) return;
         status.changesPending += 1;
-        var _dbseq = change.doc._dbseq;
-        delete change.doc._dbseq;
+        var _seq = change.doc._seq;
+        delete change.doc._seq;
         pouch.put(change.doc, function (e, d) {
             status.changesPending -= 1;
             /* NOTE: we simply don't handle errors here, choosing instead to close our eyes and
                pretend that errors are _always_ due to remote changes we will be getting soon! */
             if (!e) change.doc._rev = d.rev;
         });
-        change.doc._dbseq = _dbseq;
+        change.doc._seq = _seq;
     });
     return status;
 };
