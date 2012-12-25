@@ -1,4 +1,8 @@
-memcouch.slaveToPouch = function (memdb, pouch) {
+var memsync;
+if (typeof memcouch === 'object') memsync = memcouch;
+else memsync = module.exports;
+
+memsync.slaveToPouch = function (memdb, pouch) {
     /*
         We'd need a lot more logic in memcouch.db to make this *really* work:
         control over revs history and conflict tracking with get/put options.
