@@ -74,7 +74,7 @@ memcouch.db = function () {
     
     var watchers = [];
     db.watch = function (cb) { watchers.push(cb); };
-    db.clear = function (cb) { watchers.splice(watchers.indexOf(cb), 1); };
+    db.clear = function (cb) { var idx = watchers.indexOf(cb); if (~idx) watchers.splice(idx, 1); };
     function notify(doc) {
         watchers.forEach(function (cb) {
             var result = {seq:doc._seq, doc:doc, id:doc._id};
