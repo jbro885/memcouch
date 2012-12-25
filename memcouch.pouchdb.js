@@ -34,6 +34,7 @@ memsync.slaveToPouch = function (memdb, pouch) {
             /* NOTE: we simply don't handle errors here, choosing instead to close our eyes and
                pretend that errors are _always_ due to remote changes we will be getting soon! */
             if (!e) change.doc._rev = d.rev;
+            else if (typeof console === 'object' && console.warn) console.warn(e);
         });
         change.doc._seq = _seq;
     });
