@@ -37,6 +37,6 @@ memsync.slaveToPouch = function (memdb, pouch) {
             else if (typeof console === 'object' && console.warn) console.warn(e);
         });
         change.doc._seq = _seq;
-    });
+    }, 0);
     return status;
 };

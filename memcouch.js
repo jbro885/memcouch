@@ -1,7 +1,7 @@
 var memcouch = {};
 
 memcouch.cmp = function (a,b) {
-    // TOOD: full JSON comparisons similar to CouchDB
+    // TOOD: full JSON comparisons similar to CouchDB — http://wiki.apache.org/couchdb/View_collation?action=show&redirect=ViewCollation#Collation_Specification
     return (a < b) ? -1 : (a > b) ? 1 : 0;
 };
 
@@ -42,17 +42,19 @@ memcouch.db = function () {
         });
     };
     
-    db.query = function (map, cmp) {
+    db.query = function (map, cmp, opts) {
         map || (map = function (d) { return d._id; });
         if (cmp === true) cmp = memcouch.cmp;
+        opts || (opts = {});
         
         var results = [],
             _doc = null;
         db.emit = function (k,v) {
+            // TODO: provide built-in key/start/end filtering here to facilitate map fn re-use (and cmp coordination)
             results.push({id:_doc._id, doc:_doc, key:k||null, value:v||null});
         };
         docs.forEach(function (doc) {
-            if (doc._deleted) return;
+            if (doc._deleted && !opts.include_deleted) return;
             map.call(db, _doc = doc);
         });
         delete db.emit;
@@ -65,7 +67,7 @@ memcouch.db = function () {
     db.since = function (seq) {
         return db.query(function (doc) {
             if (doc._seq > seq) this.emit(doc._seq);
-        }, true).map(function (row) {
+        }, true, {include_deleted:true}).map(function (row) {
             var result = {seq:row.key, doc:row.doc, id:row.id};
             if (row.doc._deleted) result.deleted = true;            // TODO: .query() won't give us _deleted docs!
             return result;
@@ -73,7 +75,10 @@ memcouch.db = function () {
     };
     
     var watchers = [];
-    db.watch = function (cb) { watchers.push(cb); };                // TODO: option to "catch-up"?
+    db.watch = function (cb, seq) {
+        watchers.push(cb);
+        if (arguments.length > 1) db.since(seq).forEach(cb);
+    };
     db.clear = function (cb) { var idx = watchers.indexOf(cb); if (~idx) watchers.splice(idx, 1); };
     function notify(doc) {
         watchers.forEach(function (cb) {
