@@ -1,48 +1,69 @@
 
-class CoreDatabase {
-  constructor() {
-    // NOTE: these are ± public API
-    //       mapping _id -> full doc
-    this.sourceDocs = new Map();
-    this.editedDocs = new Map();
-  }
-  
-  updateSource(doc) {
-    this.sourceDocs.set(doc._id, doc);
-  }
-  
-  updateEdited(doc) {
-    this.editedDocs.set(doc._id, doc);
-  }
-  
-  // source docs must leave behind _deleted tombstones,
-  // but edited docs can go away after they're stored
-  removeEdited(doc) {
-    this.editedDocs.delete(doc._id);
-  }
-}
-
 class Memcouch {
   constructor() {
-    this._db = new CoreDatabase();
+    // NOTE: these are ± public API
+    //       mapping _id -> full doc [or null]
+    this.sourceDocs = new Map();
+    this.editedDocs = new Map();
+    
+    this._expectedUpdates = new Map();
+    this._currentEditToken = this._nextEditToken;
   }
   
-  get(id) {
-    return (
-      this._db.editedDocs[id] ||
-      this._db.storedDocs[id] ||
-      null
-    );
+  get _nextEditToken() {
+    let tok = Object.create(null);
+    //tok._seq = this.__debugSequence || 0;
+    //this.__debugSequence = tok._seq + 1;
+    return tok;
   }
   
-  put(doc) {
-    this._db.updateEdited(doc);
+  get currentEditToken() {
+    return this._currentEditToken;
   }
   
-  sync(doc) {}
+  localEdits(since=null) {
+    // TODO
+  }
+  
+  *_generateDocs() {
+    for (let [id, sdoc] of this.sourceDocs) {
+      let doc = (this.editedDocs.has(id)) ?
+        this.editedDocs.get(id) : sdoc;
+      if (doc && !doc._deleted) {
+        yield doc;
+      }
+    }
+  }
+  
+  get allDocs() {
+    return this._generateDocs();
+  }
+  
+  set(doc) {
+    let id = doc._id;
+    if (!this.sourceDocs.has(id)) {
+      // this keeps `*_generateDocs` simpler
+      this.sourceDocs.set(id, null);
+    }
+    this.editedDocs.set(id, doc);
+  }
+  
+  update(doc) {
+    this.sourceDocs.set(doc._id, doc);
+    // TODO: remove local if update expected, or mark conflict, etc.
+  }
+  
+  expectUpdate(id, rev) {
+    // TODO
+  }
+  
 }
 
-db.updateToken
+export default Memcouch;
+
+/*
+
+db.currentUpdateToken
 db.editsSince(tok=null)
 let unwatch = db.watch(() => {});
 
@@ -77,3 +98,4 @@ db.expectUpdate(id,rev) // [note: changes feed may skip this rev so some sort of
 //   stored= _rev of update doc matches [expected] _rev of edited
 // conflict= _rev of edited doc does not match _rev of source doc
 // if no _rev, assume no conflict (i.e. last-save-wins update…)
+*/
