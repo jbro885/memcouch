@@ -46,15 +46,41 @@ class Memcouch {
       this.sourceDocs.set(id, null);
     }
     this.editedDocs.set(id, doc);
+    // TODO: below is probably too simple, i.e. wrt conflict introduction if expected rev still comes through
+    this._expectedUpdates.delete(id);
   }
   
   update(doc) {
-    this.sourceDocs.set(doc._id, doc);
-    // TODO: remove local if update expected, or mark conflict, etc.
+    let id = doc._id;
+    this.sourceDocs.set(id, doc);
+    this._maybeCleanup(id);
+    // TODO: also mark (potential) conflict, etc.?
   }
   
+  _maybeCleanup(id) {
+    let expectedRev = this._expectedUpdates.get(id),
+        sourceDoc = this.sourceDocs.get(id);
+    if (expectedRev && sourceDoc && sourceDoc._rev === expectedRev) {
+      // essentially, this means the local edit wa
+      this.editedDocs.delete(id);
+    }
+  }
+  
+  // call this when local edit has been saved to the source.
+  assumeUpdate(id, rev=null) {
+    let doc = this.editedDocs.get(id);
+    if (rev !== null) {
+      doc._rev = rev;
+      this.expectUpdate(id, rev);
+    }
+    this.update(doc);
+  }
+  
+  // call this when local edit has been saved BUT you're relying
+  // on e.g. _changes?include_docs=true feed for the source state.
   expectUpdate(id, rev) {
-    // TODO
+    this._expectedUpdates.set(id, rev);
+    this._maybeCleanup(id);   // change may have arrived before save response
   }
   
 }
