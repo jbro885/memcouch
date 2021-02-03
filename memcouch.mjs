@@ -1,4 +1,6 @@
 
+const NEXT_UPDATE = Symbol("Represents whatever _rev the next update has.");
+
 class Memcouch {
   constructor() {
     // NOTE: these are ± public API
@@ -53,34 +55,59 @@ class Memcouch {
   update(doc) {
     let id = doc._id;
     this.sourceDocs.set(id, doc);
-    this._maybeCleanup(id);
+    this._maybeCleanup(id, 'update()');
     // TODO: also mark (potential) conflict, etc.?
   }
   
-  _maybeCleanup(id) {
-    let expectedRev = this._expectedUpdates.get(id),
-        sourceDoc = this.sourceDocs.get(id);
-    if (expectedRev && sourceDoc && sourceDoc._rev === expectedRev) {
-      // essentially, this means the local edit wa
-      this.editedDocs.delete(id);
+  _cleanup(id) {
+    this.editedDocs.delete(id);
+    this._expectedUpdates.delete(id);
+  }
+  
+  _maybeCleanup(id, caller) {
+    let updateExpected = this._expectedUpdates.has(id);
+    if (!updateExpected) {
+      return;
+    }
+    
+    let expectedRev = this._expectedUpdates.get(id);
+    if (expectedRev === NEXT_UPDATE) {
+      this._cleanup(id);
+    } else {
+      let sourceDoc = this.sourceDocs.get(id);
+      // NOTE: `sourceDoc` may be null when we `expectUpdate` on new doc
+      if (sourceDoc && sourceDoc._rev === expectedRev) {
+        this._cleanup(id);
+      } else if (caller === 'update()') {
+        console.warn("Document was updated, but with an unexpected revision.");
+        // NOTE: this can happen if doc changes faster than _changes is polled
+        // TODO: should we cleanup anyway?
+      }
     }
   }
   
-  // call this when local edit has been saved to the source.
+  // call this after save to update the rev of source version
   assumeUpdate(id, rev=null) {
     let doc = this.editedDocs.get(id);
-    if (rev !== null) {
-      doc._rev = rev;
+    if (rev === null) {
+      this.expectUpdate(id);
+    } else {
       this.expectUpdate(id, rev);
+      doc._rev = rev;
     }
     this.update(doc);
   }
   
   // call this when local edit has been saved BUT you're relying
   // on e.g. _changes?include_docs=true feed for the source state.
-  expectUpdate(id, rev) {
+  // NOTE: use `rev=NEXT_UPDATE` only when calling `update` directly afterwards!
+  expectUpdate(id, rev=NEXT_UPDATE) {
     this._expectedUpdates.set(id, rev);
-    this._maybeCleanup(id);   // change may have arrived before save response
+    if (rev !== NEXT_UPDATE) {
+      // changes could come through before
+      // the response with saved _rev does.
+      this._maybeCleanup(id, 'expectUpdate()');
+    }
   }
   
 }
