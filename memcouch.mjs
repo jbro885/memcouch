@@ -39,7 +39,7 @@ class Memcouch {
     return this._generateDocs();
   }
   
-  set(doc) {
+  edit(doc) {
     let id = doc._id;
     if (!this.sourceDocs.has(id)) {
       // this keeps `*_generateDocs` simpler

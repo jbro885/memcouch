@@ -13,7 +13,7 @@ arr = Array.from(db.allDocs);
 assert.equal(arr.length, 1, "Should contain one doc.");
 assert.equal(arr[0], doc, "Doc should have original identity.");
 
-db.set(doc = {_id:'A', _rev:1, value:1});
+db.edit(doc = {_id:'A', _rev:1, value:1});
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 1, "Should still contain only one document.");
 assert.notEqual(arr[0].value, 0, "Doc should NOT have original content.");
@@ -32,11 +32,11 @@ arr = Array.from(db.allDocs);
 assert.equal(arr[0], doc, "The remote content should prevail now.");
 assert.equal(arr.length, 1, "And still only one document.");
 
-db.set({_id:'A', _rev:1, value:2})
-db.set({_id:'A', _rev:1, value:3})
+db.edit({_id:'A', _rev:1, value:2})
+db.edit({_id:'A', _rev:1, value:3})
 
 let g = db.allDocs;
-db.set({_id:'B', value:true})
+db.edit({_id:'B', value:true})
 
 
 console.log("which tests that do exist, they did all pass.");
