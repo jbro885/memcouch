@@ -27,7 +27,7 @@ class Memcouch {
     // TODO
   }
   
-  *_generateDocs() {
+  * _generateDocs() {
     for (let [id, sdoc] of this.sourceDocs) {
       let doc = (this.editedDocs.has(id)) ?
         this.editedDocs.get(id) : sdoc;
@@ -44,7 +44,7 @@ class Memcouch {
   edit(doc) {
     let id = doc._id;
     if (!this.sourceDocs.has(id)) {
-      // this keeps `*_generateDocs` simpler
+      // this keeps `_generateDocs` simpler
       this.sourceDocs.set(id, null);
     }
     this.editedDocs.set(id, doc);
