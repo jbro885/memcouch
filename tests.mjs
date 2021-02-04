@@ -35,7 +35,7 @@ assert.equal(arr.length, 1, "And still only one document.");
 db.edit({_id:'A', _rev:3, value:50});
 db.update(doc = {_id:'A', _rev:4, value:44});
 arr = Array.from(db.allDocs);
-assert.equal(arr[0]._conflict, doc, "Sequence should result in a conflict…");
+assert.equal(arr[0][Symbol.for('memcouch._conflict')], doc, "Sequence should result in a conflict…");
 assert.equal(arr[0].value, 50, "…but the local content should be used.");
 
 tok = db.currentEditToken;

@@ -1,6 +1,7 @@
 
 const NEXT_UPDATE = Symbol("Represents whatever _rev the next update has.");
 const EDIT_SEQ = Symbol("_edit_seq");
+const CONFLICT = Symbol.for('memcouch._conflict');
 
 class Memcouch {
   constructor() {
@@ -56,7 +57,7 @@ class Memcouch {
         this.editedDocs.get(id) : sdoc;
       if (doc && !doc._deleted) {
         if (this._likelyConflicts.has(id)) {
-          doc._conflict = sdoc;
+          doc[CONFLICT] = sdoc;
         }
         yield doc;
       }
@@ -132,7 +133,7 @@ class Memcouch {
     }
     // discard local fields if present
     delete doc[EDIT_SEQ];
-    delete doc._conflict;
+    delete doc[CONFLICT];
     this.update(doc);
   }
   
@@ -150,7 +151,7 @@ class Memcouch {
   
 }
 
-export default Memcouch;
+export {Memcouch as default, CONFLICT};
 
 /*
 
