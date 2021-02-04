@@ -9,7 +9,7 @@ class Memcouch {
     this.editedDocs = new Map();
     
     this._expectedUpdates = new Map();
-    this._likelyConflicts = new Map();
+    this._likelyConflicts = new Set();
     this._currentEditToken = this._nextEditToken;
   }
   
@@ -34,11 +34,8 @@ class Memcouch {
         this.editedDocs.get(id) : sdoc;
       if (doc && !doc._deleted) {
         if (this._likelyConflicts.has(id)) {
-          // TODO: this means conflicted docs have a
-          //       different identity each iteration!
-          doc = Object.create(doc, {
-            _conflict: {value: sdoc}
-          });
+          // CAUTION: this modifies the stored doc in-place!
+          doc._conflict = sdoc;
         }
         yield doc;
       }
@@ -68,7 +65,7 @@ class Memcouch {
     this.sourceDocs.set(id, doc);
     this._maybeCleanup(id, 'update()');
     if (this.editedDocs.has(id)) {
-      this._likelyConflicts.set(id, true);
+      this._likelyConflicts.add(id);
     }
   }
   

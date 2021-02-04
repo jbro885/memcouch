@@ -32,8 +32,11 @@ arr = Array.from(db.allDocs);
 assert.equal(arr[0], doc, "The remote content should prevail now.");
 assert.equal(arr.length, 1, "And still only one document.");
 
-db.edit({_id:'A', _rev:1, value:2})
-db.edit({_id:'A', _rev:1, value:3})
+db.edit({_id:'A', _rev:3, value:50});
+db.update(doc = {_id:'A', _rev:4, value:44});
+arr = Array.from(db.allDocs);
+assert.equal(arr[0]._conflict, doc, "Sequence should result in a conflict…");
+assert.equal(arr[0].value, 50, "…but the local content should be used.");
 
 let g = db.allDocs;
 db.edit({_id:'B', value:true})
