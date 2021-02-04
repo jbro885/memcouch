@@ -4,6 +4,7 @@ import Memcouch from "./memcouch.mjs";
 
 let db = new Memcouch();
 let arr, doc, tok;    // reused below
+const _conflict = Symbol.for('memcouch._conflict');
 
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 0, "How could there be docs even??");
@@ -35,7 +36,7 @@ assert.equal(arr.length, 1, "And still only one document.");
 db.edit({_id:'A', _rev:3, value:50});
 db.update(doc = {_id:'A', _rev:4, value:44});
 arr = Array.from(db.allDocs);
-assert.equal(arr[0][Symbol.for('memcouch._conflict')], doc, "Sequence should result in a conflict…");
+assert.equal(arr[0][_conflict], doc, "Sequence should result in a conflict…");
 assert.equal(arr[0].value, 50, "…but the local content should be used.");
 
 tok = db.currentEditToken;
@@ -79,6 +80,19 @@ arr = Array.from(db.localEdits);
 assert.equal(arr.length, 0, "Should finish with no edits left.");
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 4, "Should finish with four documents total.");
+
+db.edit({_id:'E'});
+db.expectUpdate('E', "1-x");
+db.edit(doc = {_id:'E', work:"ongoing"});
+db.update({_id:'E', _rev:"1-x"});
+arr = Array.from(db.allDocs).filter(d => d._id === 'E');
+assert.equal(_conflict in arr[0], false, "Sequence should NOT result in a conflict…");
+assert.equal(arr[0], doc, "…but correct document should be in use…");
+assert.equal(arr[0].work, "ongoing", "…with the local edits visible.");
+db.update(doc = {_id:'E', _rev:"2-y"});
+arr = Array.from(db.allDocs).filter(d => d._id === 'E');
+assert.equal(arr[0][_conflict], doc, "Now there should be a conflict.");
+
 
 //console.log([...db.allDocs]);
 

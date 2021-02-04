@@ -3,6 +3,9 @@ const NEXT_UPDATE = Symbol("Represents whatever _rev the next update has.");
 const EDIT_SEQ = Symbol("memcouch.internal._edit_seq");
 const CONFLICT = Symbol.for('memcouch._conflict');
 
+// how many times will we allow unexpected updates before un-expecting them?
+const MAX_UNEXPECTED_UPDATES = 3;
+
 class Memcouch {
   constructor() {
     // NOTE: these are ± public API
@@ -78,26 +81,29 @@ class Memcouch {
     }
     this._setEditSequence(doc);
     this.editedDocs.set(id, doc);
-    if (this._expectedUpdates.has(id)) {
-      // we don't want to lose this new edit
-      this._expectedUpdates.delete(id);
-      // TODO: however, it also means that the next update is unlikely to be a real conflict :-/
-    }
   }
   
   update(doc) {
     let id = doc._id;
     this.sourceDocs.set(id, doc);
     this._maybeCleanup(id, 'update()');
+    this._maybeConflict(id);
+  }
+  
+  _maybeConflict(id) {
     if (this.editedDocs.has(id)) {
       this._likelyConflicts.add(id);
     }
   }
   
-  _cleanup(id) {
-    this.editedDocs.delete(id);
-    this._likelyConflicts.delete(id);
+  _cleanup(id, dropEdit=true) {
     this._expectedUpdates.delete(id);
+    if (dropEdit) {
+      this.editedDocs.delete(id);
+      this._likelyConflicts.delete(id);
+    } else {
+      // TODO: prevent FUTURE conflict?? [via _rev?]
+    }
   }
   
   _maybeCleanup(id, caller) {
@@ -106,18 +112,24 @@ class Memcouch {
       return;
     }
     
-    let expectedRev = this._expectedUpdates.get(id);
+    let editedDoc = this.editedDocs.get(id),
+        updateObj = this._expectedUpdates.get(id);
+    let {rev:expectedRev,doc:editSnapshot} = updateObj;
     if (expectedRev === NEXT_UPDATE) {
-      this._cleanup(id);
+      this._cleanup(id, editedDoc === editSnapshot);
     } else {
       let sourceDoc = this.sourceDocs.get(id);
       // NOTE: `sourceDoc` may be null when we `expectUpdate` on new doc
       if (sourceDoc && sourceDoc._rev === expectedRev) {
-        this._cleanup(id);
+        this._cleanup(id, editedDoc === editSnapshot);
       } else if (caller === 'update()') {
         console.warn("Document was updated, but with an unexpected revision.");
         // NOTE: this can happen if doc changes faster than _changes is polled
-        // TODO: should we cleanup anyway?
+        //       (or e.g. if even older changes are still rolling in as well…!)
+        if (++updateObj.ctr > MAX_UNEXPECTED_UPDATES) {
+          // ~HACK: give up eventually (preserving local edits just in case)
+          this._cleanup(id, false);
+        }
       }
     }
   }
@@ -141,7 +153,8 @@ class Memcouch {
   // on e.g. _changes?include_docs=true feed for the source state.
   // NOTE: use `rev=NEXT_UPDATE` only when calling `update` directly afterwards!
   expectUpdate(id, rev=NEXT_UPDATE) {
-    this._expectedUpdates.set(id, rev);
+    let doc = this.editedDocs.get(id);
+    this._expectedUpdates.set(id, {rev,doc,ctr:0});
     if (rev !== NEXT_UPDATE) {
       // changes could come through before
       // the response with saved _rev does.
