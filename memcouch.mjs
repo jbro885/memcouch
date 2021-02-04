@@ -9,6 +9,7 @@ class Memcouch {
     this.editedDocs = new Map();
     
     this._expectedUpdates = new Map();
+    this._likelyConflicts = new Map();
     this._currentEditToken = this._nextEditToken;
   }
   
@@ -32,6 +33,13 @@ class Memcouch {
       let doc = (this.editedDocs.has(id)) ?
         this.editedDocs.get(id) : sdoc;
       if (doc && !doc._deleted) {
+        if (this._likelyConflicts.has(id)) {
+          // TODO: this means conflicted docs have a
+          //       different identity each iteration!
+          doc = Object.create(doc, {
+            _conflict: {value: sdoc}
+          });
+        }
         yield doc;
       }
     }
@@ -48,19 +56,25 @@ class Memcouch {
       this.sourceDocs.set(id, null);
     }
     this.editedDocs.set(id, doc);
-    // TODO: below is probably too simple, i.e. wrt conflict introduction if expected rev still comes through
-    this._expectedUpdates.delete(id);
+    if (this._expectedUpdates.has(id)) {
+      // we don't want to lose this new edit
+      this._expectedUpdates.delete(id);
+      // TODO: however, it also means that the next update is unlikely to be a real conflict :-/
+    }
   }
   
   update(doc) {
     let id = doc._id;
     this.sourceDocs.set(id, doc);
     this._maybeCleanup(id, 'update()');
-    // TODO: also mark (potential) conflict, etc.?
+    if (this.editedDocs.has(id)) {
+      this._likelyConflicts.set(id, true);
+    }
   }
   
   _cleanup(id) {
     this.editedDocs.delete(id);
+    this._likelyConflicts.delete(id);
     this._expectedUpdates.delete(id);
   }
   
