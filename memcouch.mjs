@@ -1,6 +1,6 @@
 
 const NEXT_UPDATE = Symbol("Represents whatever _rev the next update has.");
-const EDIT_SEQ = Symbol("_edit_seq");
+const EDIT_SEQ = Symbol("memcouch.internal._edit_seq");
 const CONFLICT = Symbol.for('memcouch._conflict');
 
 class Memcouch {
