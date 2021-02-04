@@ -106,7 +106,7 @@ class Memcouch {
     // update editedDoc._rev if expected+appropriate
     // schism editedDoc._confict if unexpected
     
-    // _, 1-x, 2-y, 3-z, 4-w, 5-v
+    // _, 1-x, 2-y, 3-z, 4-w, 5-v,6-deleted
     //       \ 2-a, 3-a
     
     // newSource is…
