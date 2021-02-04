@@ -19,3 +19,11 @@ Memcouch provides a sychronous API to an in-memory collection of documents. The 
 * `db.get(id)` — returns document with given _id, or `undefined` if missing. This object may be shared with other callers.
 * `db.del(id)` — removes all non-internal fields and adds `"_deleted": true`. will no longer show up from `.get` or `.query`
 
+
+// EXPECTATIONS:
+// local edits will maintain _rev of its source
+// saved edits will expectUpdate(id, _rev) from response
+// [if unexpected change to id happens, warn but de-conflict?]
+//   stored= _rev of update doc matches [expected] _rev of edited
+// conflict= _rev of edited doc does not match _rev of source doc
+// if no _rev, assume no conflict (i.e. last-save-wins update…)
