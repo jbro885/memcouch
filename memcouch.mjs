@@ -1,5 +1,6 @@
 
 const NEXT_UPDATE = Symbol("Represents whatever _rev the next update has.");
+const EDIT_SEQ = Symbol("_edit_seq");
 
 class Memcouch {
   constructor() {
@@ -10,13 +11,15 @@ class Memcouch {
     
     this._expectedUpdates = new Map();
     this._likelyConflicts = new Set();
-    this._currentEditToken = this._nextEditToken;
+    
+    this._editSequence = new WeakMap();
+    this._editSequence.current = -1;
+    this._currentEditToken = this._generateNextEditToken();
   }
   
-  get _nextEditToken() {
+  _generateNextEditToken() {
     let tok = Object.create(null);
-    //tok._seq = this.__debugSequence || 0;
-    //this.__debugSequence = tok._seq + 1;
+    this._editSequence.set(tok, this._editSequence.current++);
     return tok;
   }
   
@@ -24,8 +27,27 @@ class Memcouch {
     return this._currentEditToken;
   }
   
-  localEdits(since=null) {
-    // TODO
+  _setEditSequence(doc) {
+    doc[EDIT_SEQ] = this._editSequence.current;
+    this._currentEditToken = this._generateNextEditToken();
+  }
+  
+  * _generateEditsSince(tok) {
+    let seq = (tok !== null) ?
+      this._editSequence.get(tok) : -1;
+    for (let edoc of this.editedDocs.values()) {
+      if (edoc[EDIT_SEQ] > seq) {
+        yield edoc;
+      }
+    }
+  }
+  
+  localEditsSinceToken(tok) {
+    return this._generateEditsSince(tok);
+  }
+  
+  get localEdits() {
+    return this._generateEditsSince(null);
   }
   
   * _generateDocs() {
@@ -34,7 +56,6 @@ class Memcouch {
         this.editedDocs.get(id) : sdoc;
       if (doc && !doc._deleted) {
         if (this._likelyConflicts.has(id)) {
-          // CAUTION: this modifies the stored doc in-place!
           doc._conflict = sdoc;
         }
         yield doc;
@@ -47,11 +68,14 @@ class Memcouch {
   }
   
   edit(doc) {
+    // NOTE: doc will be modified in-place (to add an _edit_seq and 
+    
     let id = doc._id;
     if (!this.sourceDocs.has(id)) {
       // this keeps `_generateDocs` simpler
       this.sourceDocs.set(id, null);
     }
+    this._setEditSequence(doc);
     this.editedDocs.set(id, doc);
     if (this._expectedUpdates.has(id)) {
       // we don't want to lose this new edit

@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import Memcouch from "./memcouch.mjs";
 
 let db = new Memcouch();
-let arr, doc;    // reused below
+let arr, doc, tok;    // reused below
 
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 0, "How could there be docs even??");
@@ -38,8 +38,21 @@ arr = Array.from(db.allDocs);
 assert.equal(arr[0]._conflict, doc, "Sequence should result in a conflict…");
 assert.equal(arr[0].value, 50, "…but the local content should be used.");
 
-let g = db.allDocs;
-db.edit({_id:'B', value:true})
+tok = db.currentEditToken;
+db.edit(doc = {_id:'B', value:true});
+arr = Array.from(db.allDocs);
+assert.equal(arr.length, 2, "Should now contain two documents.");
+arr = Array.from(db.localEdits);
+assert.equal(arr.length, 2, "Should see two outstanding local edits.");
+arr = Array.from(db.localEditsSinceToken(tok));
+assert.equal(arr.length, 1, "Should only see one edit relative to checkpoint.");
 
+tok = db.currentEditToken;
+db.update({_id:'C', isFor:"cookies"});
+assert.equal(db.currentEditToken, tok, "Edit token only changes on edits, not updates.");
+db.edit(doc = {_id:'C', isFor:"shanties"});
+arr = Array.from(db.localEditsSinceToken(tok));
+assert.equal(arr.length, 1, "Should again see just one edit relative to new checkpoint.");
+assert.equal(arr[0], doc, "The edit should be the expected one");
 
 console.log("which tests that do exist, they did all pass.");
