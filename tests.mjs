@@ -53,6 +53,33 @@ assert.equal(db.currentEditToken, tok, "Edit token only changes on edits, not up
 db.edit(doc = {_id:'C', isFor:"shanties"});
 arr = Array.from(db.localEditsSinceToken(tok));
 assert.equal(arr.length, 1, "Should again see just one edit relative to new checkpoint.");
-assert.equal(arr[0], doc, "The edit should be the expected one");
+assert.equal(arr[0], doc, "The edit should be the expected one.");
+
+tok = db.currentEditToken;
+db.edit({_id:'D'});
+db.expectUpdate('D', "1-x");
+arr = Array.from(db.localEditsSinceToken(tok));
+assert.equal(arr.length, 1, "Edit should persist while expecting update…");
+db.update({_id:'D', _rev:"1-x"});
+arr = Array.from(db.localEditsSinceToken(tok));
+assert.equal(arr.length, 0, "…but not after it comes in.");
+
+db.edit({_id:'D', _rev:"1-x", edited:1});
+tok = db.currentEditToken;
+db.assumeUpdate('D', "2-y");
+db.edit(doc = {_id:'D', _rev:"1-x", edited:2});
+arr = Array.from(db.localEditsSinceToken(tok));
+assert.equal(arr.length, 1, "Edits after assumed update are tracked.");
+assert.equal(arr[0], doc, "The edit should be the expected one.");
+db.assumeUpdate('A');
+db.assumeUpdate('B');
+db.assumeUpdate('C');
+db.assumeUpdate('D', "3-z");
+arr = Array.from(db.localEdits);
+assert.equal(arr.length, 0, "Should finish with no edits left.");
+arr = Array.from(db.allDocs);
+assert.equal(arr.length, 4, "Should finish with four documents total.");
+
+//console.log([...db.allDocs]);
 
 console.log("which tests that do exist, they did all pass.");

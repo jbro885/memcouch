@@ -130,6 +130,9 @@ class Memcouch {
       this.expectUpdate(id, rev);
       doc._rev = rev;
     }
+    // discard local fields if present
+    delete doc[EDIT_SEQ];
+    delete doc._conflict;
     this.update(doc);
   }
   
