@@ -90,6 +90,74 @@ class Memcouch {
     this._maybeConflict(id);
   }
   
+  update_take2(doc) {
+    let id = doc._id,
+        newSource = doc,
+        oldSource = this.sourceDocs.get(id),
+        editedDoc = this.editedDocs.get(id),
+        updateObj = this._expectedUpdates.get(id);
+    
+    // this is a given: always incorporate the newest update
+    this.sourceDocs.set(id, doc);
+    
+    // but what if we have an `editedDoc` / `updateObj`?
+    //  e.g.
+    // remove editedDoc if no longer needed
+    // update editedDoc._rev if expected+appropriate
+    // schism editedDoc._confict if unexpected
+    
+    // _, 1-x, 2-y, 3-z, 4-w, 5-v
+    //       \ 2-a, 3-a
+    
+    // newSource is…
+    // - forerunner
+    // - progenitor \
+    // - equivalent  - …of editedDoc [and/or oldSource??]
+    // - descendant /
+    // - competitor
+    
+    function extractGeneration(rev) {
+      return (rev) ? +(rev.split['-'][0]) : 0;
+    }
+    
+    let relation = TODO;
+    switch (relation) {
+    case 'equivalent':
+      // editedDoc no longer needed
+      break;
+    case 'descendant':
+    case 'competitor':
+      // editedDoc conflicts with source
+      break;
+    case 'forerunner':
+      // not most recent
+      break;
+    case 'progenitor':
+      // editedDoc._rev = newSource._rev
+      break;
+    } 
+    
+    
+    let oldRev = (oldSource) ? oldSource._rev : null,
+        newRev = newSource._rev,
+        lclRev = editedDoc._rev,
+        expRev = updateObj.rev;
+    if (expRev === NEXT_UPDATE) expRev = newRev;
+    
+    if (newRev === oldRev) {
+      // what gives?
+    } else if (newRev === expRev) {
+      if (editedDoc === updateObj.doc) {
+        // remove editedDoc
+      } else {
+        // update editedDoc._rev
+      }
+    } else {
+      // probably a conflict?? [or maybe an older-than-expected rev?]
+    }
+  }
+  
+  
   _maybeConflict(id) {
     if (this.editedDocs.has(id)) {
       this._likelyConflicts.add(id);
