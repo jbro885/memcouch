@@ -8,7 +8,8 @@ What could possibly go wrong?
 
 
 \* Note that it would take not-insignificant more code complexity here to participate in full replication.
-Perhaps a more accurate way of describing what memcouch does right now is "slaving", to a single persistent/remote database.
+Sorry for [using this language](https://cdm.link/2020/06/lets-dump-master-slave-terms/) in the original version of this library; this version of memcouch and its documentation is deprecated and is being replaced.
+~~Perhaps a more accurate way of describing what memcouch does right now is "slaving"~~, to a single persistent/remote database.
 
 
 ## Example usage
