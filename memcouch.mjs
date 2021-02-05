@@ -1,10 +1,5 @@
-
-const NEXT_UPDATE = Symbol("Represents whatever _rev the next update has.");
 const EDIT_SEQ = Symbol("memcouch.internal._edit_seq");
 const CONFLICT = Symbol.for('memcouch._conflict');
-
-// how many times will we allow unexpected updates before un-expecting them?
-const MAX_UNEXPECTED_UPDATES = 3;
 
 class Memcouch {
   constructor() {
@@ -12,9 +7,6 @@ class Memcouch {
     //       mapping _id -> full doc [or null]
     this.sourceDocs = new Map();
     this.editedDocs = new Map();
-    
-    this._expectedUpdates = new Map();
-    this._likelyConflicts = new Set();
     
     this._editSequence = new WeakMap();
     this._editSequence.current = -1;
@@ -59,9 +51,6 @@ class Memcouch {
       let doc = (this.editedDocs.has(id)) ?
         this.editedDocs.get(id) : sdoc;
       if (doc && !doc._deleted) {
-        if (this._likelyConflicts.has(id)) {
-          doc[CONFLICT] = sdoc;
-        }
         yield doc;
       }
     }
@@ -71,9 +60,10 @@ class Memcouch {
     return this._generateDocs();
   }
   
+  // "the user would like `doc` to be its future state"
+  // NOTE: `doc._rev` will be modified in-place
+  //      (as well as [CONFLICT] and [EDIT_SEQ])
   edit(doc) {
-    // NOTE: doc will be modified in-place (to add an _edit_seq and 
-    
     let id = doc._id;
     if (!this.sourceDocs.has(id)) {
       // this keeps `_generateDocs` simpler
@@ -83,153 +73,39 @@ class Memcouch {
     this.editedDocs.set(id, doc);
   }
   
+  // "the source considers `doc` to be its current state"
   update(doc) {
     let id = doc._id;
     this.sourceDocs.set(id, doc);
-    this._maybeCleanup(id, 'update()');
-    this._maybeConflict(id);
-  }
-  
-  update_take2(doc) {
-    let id = doc._id,
-        newSource = doc,
-        oldSource = this.sourceDocs.get(id),
-        editedDoc = this.editedDocs.get(id),
-        updateObj = this._expectedUpdates.get(id);
     
-    // this is a given: always incorporate the newest update
-    this.sourceDocs.set(id, doc);
-    
-    // but what if we have an `editedDoc` / `updateObj`?
-    //  e.g.
-    // remove editedDoc if no longer needed
-    // update editedDoc._rev if expected+appropriate
-    // schism editedDoc._confict if unexpected
-    
-    // _, 1-x, 2-y, 3-z, 4-w, 5-v,6-deleted
-    //       \ 2-a, 3-a
-    
-    // newSource is…
-    // - forerunner
-    // - progenitor \
-    // - equivalent  - …of editedDoc [and/or oldSource??]
-    // - descendant /
-    // - competitor
-    
-    function extractGeneration(rev) {
-      return (rev) ? +(rev.split['-'][0]) : 0;
-    }
-    
-    let relation = TODO;
-    switch (relation) {
-    case 'equivalent':
-      // editedDoc no longer needed
-      break;
-    case 'descendant':
-    case 'competitor':
-      // editedDoc conflicts with source
-      break;
-    case 'forerunner':
-      // not most recent
-      break;
-    case 'progenitor':
-      // editedDoc._rev = newSource._rev
-      break;
-    } 
-    
-    
-    let oldRev = (oldSource) ? oldSource._rev : null,
-        newRev = newSource._rev,
-        lclRev = editedDoc._rev,
-        expRev = updateObj.rev;
-    if (expRev === NEXT_UPDATE) expRev = newRev;
-    
-    if (newRev === oldRev) {
-      // what gives?
-    } else if (newRev === expRev) {
-      if (editedDoc === updateObj.doc) {
-        // remove editedDoc
-      } else {
-        // update editedDoc._rev
-      }
-    } else {
-      // probably a conflict?? [or maybe an older-than-expected rev?]
+    // note (probable) conflict on locally-edited doc
+    let edoc = this.editedDocs.get(id);
+    if (edoc && edoc._rev !== doc._rev) {
+      edoc[CONFLICT] = doc;
     }
   }
   
-  
-  _maybeConflict(id) {
-    if (this.editedDocs.has(id)) {
-      this._likelyConflicts.add(id);
+  // "the edits to ${id} as of ${tok} have been accepted by the source as ${rev}"
+  updateFromEdit(id, tok=this.currentEditToken, rev=null) {
+    let seq = this._editSequence.get(tok),
+        edoc = this.editedDocs.get(id);
+    
+    // in either of the cases below,
+    // the updated _rev is the best.
+    if (rev !== null) {
+      edoc._rev = rev;
     }
-  }
-  
-  _cleanup(id, dropEdit=true) {
-    this._expectedUpdates.delete(id);
-    if (dropEdit) {
+    
+    if (edoc[EDIT_SEQ] <= seq) {
+      // "store" the edits as-saved
+      delete edoc[EDIT_SEQ];
+      delete edoc[CONFLICT];
+      this.sourceDocs.set(id, edoc);
       this.editedDocs.delete(id);
-      this._likelyConflicts.delete(id);
     } else {
-      // TODO: prevent FUTURE conflict?? [via _rev?]
+      // there have been further edits, don't discard them!
     }
   }
-  
-  _maybeCleanup(id, caller) {
-    let updateExpected = this._expectedUpdates.has(id);
-    if (!updateExpected) {
-      return;
-    }
-    
-    let editedDoc = this.editedDocs.get(id),
-        updateObj = this._expectedUpdates.get(id);
-    let {rev:expectedRev,doc:editSnapshot} = updateObj;
-    if (expectedRev === NEXT_UPDATE) {
-      this._cleanup(id, editedDoc === editSnapshot);
-    } else {
-      let sourceDoc = this.sourceDocs.get(id);
-      // NOTE: `sourceDoc` may be null when we `expectUpdate` on new doc
-      if (sourceDoc && sourceDoc._rev === expectedRev) {
-        this._cleanup(id, editedDoc === editSnapshot);
-      } else if (caller === 'update()') {
-        console.warn("Document was updated, but with an unexpected revision.");
-        // NOTE: this can happen if doc changes faster than _changes is polled
-        //       (or e.g. if even older changes are still rolling in as well…!)
-        if (++updateObj.ctr > MAX_UNEXPECTED_UPDATES) {
-          // ~HACK: give up eventually (preserving local edits just in case)
-          this._cleanup(id, false);
-        }
-      }
-    }
-  }
-  
-  // call this after save to update the rev of source version
-  assumeUpdate(id, rev=null) {
-    let doc = this.editedDocs.get(id);
-    if (rev === null) {
-      this.expectUpdate(id);
-    } else {
-      this.expectUpdate(id, rev);
-      doc._rev = rev;
-    }
-    // discard local fields if present
-    delete doc[EDIT_SEQ];
-    delete doc[CONFLICT];
-    this.update(doc);
-  }
-  
-  // call this when local edit has been saved BUT you're relying
-  // on e.g. _changes?include_docs=true feed for the source state.
-  // NOTE: use `rev=NEXT_UPDATE` only when calling `update` directly afterwards!
-  expectUpdate(id, rev=NEXT_UPDATE) {
-    let doc = this.editedDocs.get(id);
-    this._expectedUpdates.set(id, {rev,doc,ctr:0});
-    if (rev !== NEXT_UPDATE) {
-      // changes could come through before
-      // the response with saved _rev does.
-      this._maybeCleanup(id, 'expectUpdate()');
-    }
-  }
-  
 }
 
 export {Memcouch as default, CONFLICT};

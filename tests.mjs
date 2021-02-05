@@ -20,17 +20,24 @@ assert.equal(arr.length, 1, "Should still contain only one document.");
 assert.notEqual(arr[0].value, 0, "Doc should NOT have original content.");
 assert.equal(arr[0], doc, "Should contain new document object.");
 
-db.update({_id:'A', _rev:2, value:42});
+db.update(tok = {_id:'A', _rev:2, value:42});
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 1, "Should STILL contain only one document.");
 assert.equal(arr[0], doc, "Should still expose locally-edited doc.");
+assert.equal(arr[0][_conflict], tok, "Potential conflict should be noted.");
 
-db.expectUpdate('A', 3);
+db.edit(doc = {_id:'A', _rev:2, value:43});
+db.updateFromEdit('A', db.currentEditToken, 3);
 arr = Array.from(db.allDocs);
-assert.equal(arr[0], doc, "The locally-edited content should abides.");
-db.update(doc = {_id:'A', _rev:3, value:43});
+assert.equal(arr[0], doc, "The locally-edited _content_ should abide.");
+assert.equal(_conflict in arr[0], false, "Conflict should be resolved.");
+assert.equal(doc._rev, 3, "Revision should be up-to-date.");
+arr = Array.from(db.localEdits);
+assert.equal(arr.length, 0, "Should be clear of local edits.");
+
+db.update(doc = {_id:'A', _rev:3, value:43, ts:"2021"});
 arr = Array.from(db.allDocs);
-assert.equal(arr[0], doc, "The remote content should prevail now.");
+assert.equal(arr[0], doc, "The remote content should prevail.");
 assert.equal(arr.length, 1, "And still only one document.");
 
 db.edit({_id:'A', _rev:3, value:50});
@@ -56,34 +63,30 @@ arr = Array.from(db.localEditsSinceToken(tok));
 assert.equal(arr.length, 1, "Should again see just one edit relative to new checkpoint.");
 assert.equal(arr[0], doc, "The edit should be the expected one.");
 
-tok = db.currentEditToken;
 db.edit({_id:'D'});
-db.expectUpdate('D', "1-x");
-arr = Array.from(db.localEditsSinceToken(tok));
-assert.equal(arr.length, 1, "Edit should persist while expecting update…");
-db.update({_id:'D', _rev:"1-x"});
-arr = Array.from(db.localEditsSinceToken(tok));
-assert.equal(arr.length, 0, "…but not after it comes in.");
-
-db.edit({_id:'D', _rev:"1-x", edited:1});
 tok = db.currentEditToken;
-db.assumeUpdate('D', "2-y");
-db.edit(doc = {_id:'D', _rev:"1-x", edited:2});
+db.edit({_id:'D', change:true});
+db.updateFromEdit('D', tok, "1-x");
 arr = Array.from(db.localEditsSinceToken(tok));
-assert.equal(arr.length, 1, "Edits after assumed update are tracked.");
-assert.equal(arr[0], doc, "The edit should be the expected one.");
-db.assumeUpdate('A');
-db.assumeUpdate('B');
-db.assumeUpdate('C');
-db.assumeUpdate('D', "3-z");
-arr = Array.from(db.localEdits);
-assert.equal(arr.length, 0, "Should finish with no edits left.");
-arr = Array.from(db.allDocs);
-assert.equal(arr.length, 4, "Should finish with four documents total.");
+assert.equal(arr.length, 1, "Edit made e.g. in midst of save should persist");
+assert.equal(arr[0].change, true, "Successful save of earlier version shouldn't drop ongoing changes.");
+db.updateFromEdit('D', db.currentEditToken, "2-y");
+arr = Array.from(db.localEditsSinceToken(tok));
+assert.equal(arr.length, 0, "After subsequent save, should reflect no local edits this time.");
 
-db.edit({_id:'E'});
-db.expectUpdate('E', "1-x");
-db.edit(doc = {_id:'E', work:"ongoing"});
+arr = Array.from(db.localEdits);
+assert.equal(arr.length, 3, "Earlier edits (to A/B/C) should still be visible.");
+db.updateFromEdit('A');
+db.updateFromEdit('B');
+db.updateFromEdit('C');
+arr = Array.from(db.localEdits);
+assert.equal(arr.length, 0, "No more edits should be outstanding.");
+arr = Array.from(db.allDocs);
+assert.equal(arr.length, 4, "There should now be four documents total.");
+
+db.edit(doc = {_id:'E'});
+db.updateFromEdit('E', db.currentEditToken, "1-x");
+db.edit(Object.assign(doc, {work:"ongoing"}));
 db.update({_id:'E', _rev:"1-x"});
 arr = Array.from(db.allDocs).filter(d => d._id === 'E');
 assert.equal(_conflict in arr[0], false, "Sequence should NOT result in a conflict…");
@@ -92,8 +95,8 @@ assert.equal(arr[0].work, "ongoing", "…with the local edits visible.");
 db.update(doc = {_id:'E', _rev:"2-y"});
 arr = Array.from(db.allDocs).filter(d => d._id === 'E');
 assert.equal(arr[0][_conflict], doc, "Now there should be a conflict.");
+assert.equal(arr[0].work, "ongoing", "Yet the local edits remain visible.");
 
-
-//console.log([...db.allDocs]);
+console.log([...db.allDocs]);
 
 console.log("which tests that do exist, they did all pass.");
