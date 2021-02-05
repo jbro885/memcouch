@@ -112,6 +112,7 @@ class Memcouch {
       // if update isn't shadowed, allDocs changes
       this._notifySubscribers(id, doc._rev);
     } else if (edoc._rev !== doc._rev) {
+      // BUG/TODO: this will be discarded on next edit even if unresolved!
       edoc[CONFLICT] = doc;
       // this also ± changes allDocs (if UI handles conflicts)
       this._notifySubscribers(id);
@@ -147,7 +148,7 @@ class Memcouch {
     
     // betwen _rev or dropped/revived edit,
     // just assume the UI may need to know.
-    this._notifySubscribers(id);
+    this._notifySubscribers();
   }
 }
 
