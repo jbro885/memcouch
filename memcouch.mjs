@@ -8,10 +8,34 @@ class Memcouch {
     this.sourceDocs = new Map();
     this.editedDocs = new Map();
     
+    // these provide internal support for edit tokens
     this._editSequence = new WeakMap();
     this._editSequence.current = -1;
     this._currentEditToken = this._generateNextEditToken();
+    
+    // these provide internal support for our simple pub-sub mechanism
+    this._subscribers = [];
+    this._next_sub_id = 0;
   }
+  
+  _notifySubscribers() {
+    this._subscribers.forEach((d) => {
+      d.cb.call(this, arguments);
+    });
+  }
+  
+  _unsubscribe(id) {
+    this._subscribers = this._subscribers.filter(d => d.id !== id);
+  }
+  
+  subscribe(cb) {
+    let id = this._next_sub_id++;
+    this._subscribers.push({id,cb});
+    return () => {
+      this._unsubscribe(id);
+    };
+  }
+  
   
   _generateNextEditToken() {
     let tok = Object.create(null);
@@ -74,6 +98,7 @@ class Memcouch {
     }
     this._setEditSequence(doc);
     this.editedDocs.set(id, doc);
+    this._notifySubscribers(id);
   }
   
   // "the source considers `doc` to be its current state"
@@ -83,8 +108,13 @@ class Memcouch {
     
     // note (probable) conflict on locally-edited doc
     let edoc = this.editedDocs.get(id);
-    if (edoc && edoc._rev !== doc._rev) {
+    if (!edoc) {
+      // if update isn't shadowed, allDocs changes
+      this._notifySubscribers(id, doc._rev);
+    } else if (edoc._rev !== doc._rev) {
       edoc[CONFLICT] = doc;
+      // this also ± changes allDocs (if UI handles conflicts)
+      this._notifySubscribers(id);
     }
   }
   
@@ -114,6 +144,10 @@ class Memcouch {
         this.sourceDocs.set(id, {_id:id});
       }
     }
+    
+    // betwen _rev or dropped/revived edit,
+    // just assume the UI may need to know.
+    this._notifySubscribers(id);
   }
 }
 

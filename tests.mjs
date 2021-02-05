@@ -6,25 +6,47 @@ let db = new Memcouch();
 let arr, doc, tok;    // reused below
 const _conflict = Symbol.for('memcouch._conflict');
 
+
+let notifyCount = 0;
+const countNotifications = () => {
+  ++notifyCount;
+};
+
+const unsubscribe = db.subscribe(countNotifications);
+
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 0, "How could there be docs even??");
+assert.equal(notifyCount, 0, "Yeah, no.");
 
 db.update(doc = {_id:'A', _rev:1, value:0});
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 1, "Should contain one doc.");
 assert.equal(arr[0], doc, "Doc should have original identity.");
+assert.equal(notifyCount, 1, "Subscriber should get notified.");
 
+const unsubscribe2 = db.subscribe(countNotifications);
+
+notifyCount = 0;
 db.edit(doc = {_id:'A', _rev:1, value:1});
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 1, "Should still contain only one document.");
 assert.notEqual(arr[0].value, 0, "Doc should NOT have original content.");
 assert.equal(arr[0], doc, "Should contain new document object.");
+assert.equal(notifyCount, 2, "Subscriber callback should have fired twice (once for each subscriber).");
 
+unsubscribe2();
+notifyCount = 0;
 db.update(tok = {_id:'A', _rev:2, value:42});
 arr = Array.from(db.allDocs);
 assert.equal(arr.length, 1, "Should STILL contain only one document.");
 assert.equal(arr[0], doc, "Should still expose locally-edited doc.");
 assert.equal(arr[0][_conflict], tok, "Potential conflict should be noted.");
+assert.equal(notifyCount, 1, "Subscriber callback should have fired once (for remaining subscriber, on account of conflict)");
+
+assert.doesNotThrow(() => {
+  unsubscribe2();
+  unsubscribe2();
+}, "No problem calling unsubscribe helper multiple times");
 
 db.edit(doc = {_id:'A', _rev:2, value:43});
 db.updateFromEdit('A', db.currentEditToken, 3);
@@ -55,13 +77,19 @@ assert.equal(arr.length, 2, "Should see two outstanding local edits.");
 arr = Array.from(db.localEditsSinceToken(tok));
 assert.equal(arr.length, 1, "Should only see one edit relative to checkpoint.");
 
+notifyCount = 0;
 tok = db.currentEditToken;
 db.update({_id:'C', isFor:"cookies"});
 assert.equal(db.currentEditToken, tok, "Edit token only changes on edits, not updates.");
+assert.equal(notifyCount, 1, "But subscriber should still have been notified.");
 db.edit(doc = {_id:'C', isFor:"shanties"});
 arr = Array.from(db.localEditsSinceToken(tok));
 assert.equal(arr.length, 1, "Should again see just one edit relative to new checkpoint.");
 assert.equal(arr[0], doc, "The edit should be the expected one.");
+
+notifyCount = 0;
+db.update({_id:'C', isFor:"ignoring"});
+assert.equal(notifyCount, 0, "Shadowed change should not notify subscriber.");
 
 db.edit({_id:'D'});
 tok = db.currentEditToken;
