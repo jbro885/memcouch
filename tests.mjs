@@ -97,6 +97,23 @@ arr = Array.from(db.allDocs).filter(d => d._id === 'E');
 assert.equal(arr[0][_conflict], doc, "Now there should be a conflict.");
 assert.equal(arr[0].work, "ongoing", "Yet the local edits remain visible.");
 
-console.log([...db.allDocs]);
+tok = db.currentEditToken;
+db.edit({_id:'B', _deleted:true});
+arr = Array.from(db.allDocs).filter(d => d._id === 'B');
+assert.equal(arr.length, 0, "Deleted document should not appear in allDocs.");
+arr = Array.from(db.localEditsSinceToken(tok)).filter(d => d._id === 'B');
+assert.equal(arr.length, 1, "Deleted document should yes appear in localEdits…");
+db.edit({_id:'F'});
+tok = db.currentEditToken;
+db.edit({_id:'F', _deleted:true});
+arr = Array.from(db.localEdits).filter(d => d._id === 'F');
+assert.equal(arr.length, 0, "…unless they were only ever local in the first place.");
+db.updateFromEdit('F', tok, "1-x");
+arr = Array.from(db.localEdits).filter(d => d._id === 'F');
+assert.equal(arr.length, 1, "Except if it turns out we did save an earlier version, deletion is an edit.");
+db.updateFromEdit('B');
+
+console.log("allDocs:", [...db.allDocs]);
+console.log("localEdits:", [...db.localEdits]);
 
 console.log("which tests that do exist, they did all pass.");

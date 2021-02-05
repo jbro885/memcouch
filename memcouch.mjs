@@ -33,6 +33,9 @@ class Memcouch {
       this._editSequence.get(tok) : -1;
     for (let edoc of this.editedDocs.values()) {
       if (edoc[EDIT_SEQ] > seq) {
+        if (edoc._deleted && this.sourceDocs.get(edoc._id) === null) {
+          continue;   // source doesn't need to know about this one
+        }
         yield edoc;
       }
     }
@@ -88,7 +91,8 @@ class Memcouch {
   // "the edits to ${id} as of ${tok} have been accepted by the source as ${rev}"
   updateFromEdit(id, tok=this.currentEditToken, rev=null) {
     let seq = this._editSequence.get(tok),
-        edoc = this.editedDocs.get(id);
+        edoc = this.editedDocs.get(id),
+        sdoc = this.sourceDocs.get(id);
     
     // in either of the cases below,
     // the updated _rev is the best.
@@ -104,6 +108,11 @@ class Memcouch {
       this.editedDocs.delete(id);
     } else {
       // there have been further edits, don't discard them!
+      if (sdoc === null) {
+        // some earlier version of edoc has been stored, so now
+        // if the doc is locally deleted we must show as edited.
+        this.sourceDocs.set(id, {_id:id});
+      }
     }
   }
 }
