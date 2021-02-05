@@ -1,6 +1,7 @@
 import { strict as assert } from 'assert';
 
 import Memcouch from "./memcouch.mjs";
+//import {default as Memcouch, CONFLICT as _conflict} from "./memcouch.mjs";
 
 let db = new Memcouch();
 let arr, doc, tok;    // reused below
