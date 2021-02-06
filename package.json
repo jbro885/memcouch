@@ -2,7 +2,8 @@
   "name": "memcouch",
   "version": "0.9.0",
   "description": "tiny in-memory CouchDB wannabe",
-  "main": "memcouch.js",
+  "type": "module",
+  "main": "memcouch.mjs",
   "repository": {
     "type": "git",
     "url": "git://github.com/natevw/memcouch.git"
